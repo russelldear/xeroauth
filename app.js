@@ -1,11 +1,14 @@
 
-var config = require('./config.json')
+var config = require('./config.json');
+var sql = require('./sql.js');
 var OAuth = require('oauth');
 var open = require('open');
 var events = require('events');
+var util = require('util');
 
 var razor = new events.EventEmitter();
 razor.on('requestTokenRetrieved', verifyAuthorisation);
+razor.on('authorised', makeRequest);
 
 var oauth = new OAuth.OAuth(
 	config.requestUri,
@@ -19,31 +22,44 @@ var oauth = new OAuth.OAuth(
 
 var requestToken = "";
 var requestTokenSecret = "";
-var accessToken = "";
-var accessTokenSecret = "";
 var verifier = "";
+var accessTokenSecret = "";
 
-console.log("Retrieving request token...")
-oauth.getOAuthRequestToken(function(error, request_token, request_token_secret, requestResults){
-	if(error) {
-		console.log('error :' + error)
+var token = sql.getToken(config.consumerKey, onTokenRetrieval);
+
+function onTokenRetrieval(token){
+	if (token != null) {
+		accessToken = token.tokenKey;
+		accessTokenSecret = token.tokenSecret;
+		razor.emit('authorised')
 	}
-	else { 
-		console.log('oauth_token :' + request_token)
-		console.log('oauth_token_secret :' + request_token_secret)
-
-		requestToken = request_token;
-		requestTokenSecret = request_token_secret;
-
-		open(config.authoriseUri + request_token)
-
-		console.log('Enter verification code:')
-
-		razor.emit('requestTokenRetrieved');
+	else {
+		getRequestToken();
 	}
-});
+}
+
+function getRequestToken(){
+	console.log("Retrieving request token...")
+	oauth.getOAuthRequestToken(function(error, request_token, request_token_secret, requestResults){
+		if(error) {
+			console.log('error :' + util.inspect(error))
+		}
+		else { 
+			console.log('oauth_token :' + request_token)
+			console.log('oauth_token_secret :' + request_token_secret)
+
+			requestToken = request_token;
+			requestTokenSecret = request_token_secret;
+
+			open(config.authoriseUri + request_token)
+
+			razor.emit('requestTokenRetrieved');
+		}
+	});
+}
 
 function verifyAuthorisation(){
+	console.log('Enter verification code:')
 	var stdin = process.openStdin();
 
 	stdin.addListener("data", function(d) {
@@ -51,17 +67,26 @@ function verifyAuthorisation(){
 		getAccessToken();
 		process.stdin.pause();
 	});
+}
 
-	function getAccessToken() {
-		oauth.getOAuthAccessToken(requestToken, requestTokenSecret, verifier, function(error, access_token, access_token_secret, accessResults) {
-			console.log('access_token :' + access_token)
-			console.log('access_token_secret :' + access_token_secret)
+function getAccessToken() {
+	console.log("Retrieving access token...");
+	oauth.getOAuthAccessToken(requestToken, requestTokenSecret, verifier, function(error, access_token, access_token_secret, accessResults) {
+		console.log('access_token :' + access_token)
+		console.log('access_token_secret :' + access_token_secret)
 
-			var output = "";
+		sql.setToken(config.consumerKey, access_token, access_token_secret);
 
-			oauth.getProtectedResource("https://api.xero.com/api.xro/2.0/organisation", "GET", access_token, access_token_secret,  function (error, output, response) {
-				console.log(output);
-			});
-		});
-	}
+		accessToken = access_token;
+		accessTokenSecret = access_token_secret;
+
+		razor.emit('authorised')
+	});
+}
+
+function makeRequest(){
+	console.log("Making request...")
+	oauth.getProtectedResource("https://api.xero.com/api.xro/2.0/organisation", "GET", accessToken, accessTokenSecret,  function (error, output, response) {
+		console.log(output);
+	});
 }
