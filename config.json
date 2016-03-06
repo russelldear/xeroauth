@@ -1,0 +1,7 @@
+{
+	"requestUri" : "https://api.xero.com/oauth/RequestToken",
+	"accessUri" : "https://api.xero.com/oauth/AccessToken",
+	"authoriseUri" : "https://app.xero.com/oauth/APIAuthorise?oauth_token=",
+	"consumerKey" : "9Y1R7TLMO2WFQW5WKIGXMKHQE3NK9X",
+	"consumerSecret" : "WJYOSP4QYX4QFBYPYHI8MJ1D5Y2VPC"
+}
